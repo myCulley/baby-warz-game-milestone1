@@ -12,6 +12,13 @@
   handle /matchmake/* {
     reverse_proxy server:2567
   }
+  @websockets {
+    header Connection *Upgrade*
+    header Upgrade websocket
+  }
+  handle @websockets {
+    reverse_proxy server:2567
+  }
   handle {
     root * /srv
     try_files {path} /index.html

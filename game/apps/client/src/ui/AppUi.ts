@@ -35,9 +35,13 @@ export class AppUi {
           await onJoin(name, submitter.value as "create" | "join");
         } catch (error) {
           this.joined = false;
-          this.toast(
-            error instanceof Error ? error.message : "Could not join.",
-          );
+
+          const message =
+            error instanceof Error && error.message.trim()
+              ? error.message
+              : "Could not connect to the game server. Please try again.";
+
+          this.toast(message);
         }
       });
   }
