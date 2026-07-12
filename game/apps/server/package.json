@@ -1,0 +1,27 @@
+{
+  "name": "@baby-warz/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/app.config.ts",
+    "start": "node dist/app.config.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src"
+  },
+  "dependencies": {
+    "@baby-warz/shared": "workspace:*",
+    "@colyseus/tools": "0.17.19",
+    "@dimforge/rapier3d-compat": "0.19.3",
+    "colyseus": "0.17.10",
+    "pino": "10.3.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "tsx": "4.23.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

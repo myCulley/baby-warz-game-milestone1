@@ -1,0 +1,25 @@
+:8080 {
+  encode zstd gzip
+  handle /healthz {
+    respond "ok" 200
+  }
+  handle /health {
+    reverse_proxy server:2567
+  }
+  handle /api/* {
+    reverse_proxy server:2567
+  }
+  handle /matchmake/* {
+    reverse_proxy server:2567
+  }
+  handle {
+    root * /srv
+    try_files {path} /index.html
+    file_server
+  }
+  header {
+    X-Content-Type-Options nosniff
+    Referrer-Policy strict-origin-when-cross-origin
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  }
+}

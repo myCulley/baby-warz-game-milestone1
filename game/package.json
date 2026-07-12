@@ -1,0 +1,24 @@
+{
+  "name": "baby-warz",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @baby-warz/server --filter @baby-warz/client dev",
+    "build": "pnpm -r --workspace-concurrency=1 build",
+    "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
+    "lint": "prettier --check . && pnpm typecheck",
+    "format": "prettier --write .",
+    "test": "pnpm --filter @baby-warz/shared build && pnpm --filter @baby-warz/shared test && pnpm --filter @baby-warz/server test",
+    "test:e2e": "playwright test",
+    "check": "pnpm lint && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "prettier": "3.9.5",
+    "typescript": "7.0.2"
+  }
+}

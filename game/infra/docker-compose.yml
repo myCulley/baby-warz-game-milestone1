@@ -1,0 +1,47 @@
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.server
+    environment:
+      PORT: 2567
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://baby-warz.mytechvault.com}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RECONNECT_GRACE_SECONDS: ${RECONNECT_GRACE_SECONDS:-15}
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:2567/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks: [game]
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.client
+      args:
+        VITE_SERVER_URL: ${VITE_SERVER_URL:-}
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [game]
+
+networks:
+  game:
+    driver: bridge

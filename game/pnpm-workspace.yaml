@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Colyseus exposes an optional uWebSockets transport through a git dependency.
+# Baby Warz uses ws-transport, but pnpm resolves the published optional tree.
+blockExoticSubdeps: false
+
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true

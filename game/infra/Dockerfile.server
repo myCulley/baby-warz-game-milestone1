@@ -1,0 +1,24 @@
+FROM node:24.18.0-alpine AS build
+RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
+WORKDIR /app
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+COPY packages/shared/package.json packages/shared/package.json
+COPY apps/server/package.json apps/server/package.json
+RUN pnpm install --frozen-lockfile --filter @baby-warz/server... --filter @baby-warz/shared
+COPY packages/shared packages/shared
+COPY apps/server apps/server
+RUN pnpm --filter @baby-warz/shared build && pnpm --filter @baby-warz/server build
+
+FROM node:24.18.0-alpine
+RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
+WORKDIR /app
+ENV NODE_ENV=production PORT=2567
+COPY --from=build /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/server/node_modules ./apps/server/node_modules
+COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build /app/apps/server/package.json ./apps/server/package.json
+COPY --from=build /app/apps/server/dist ./apps/server/dist
+EXPOSE 2567
+CMD ["node", "apps/server/dist/app.config.js"]
