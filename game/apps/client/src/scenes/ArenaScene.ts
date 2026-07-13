@@ -5,6 +5,8 @@ import {
   DirectionalLight,
   Engine,
   HemisphericLight,
+  LoadAssetContainerAsync,
+  ImportMeshAsync,
   Mesh,
   MeshBuilder,
   PBRMaterial,
@@ -13,6 +15,7 @@ import {
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
+import "@babylonjs/loaders/glTF";
 import {
   BALL_SPAWNS,
   FOOD_SPAWNS,
@@ -39,6 +42,8 @@ export class ArenaScene {
   private readonly entities = new Map<string, TransformNode>();
   private readonly materials = new Map<string, StandardMaterial>();
   private hookMeshes: Mesh[] = [];
+  private babyAssets?: Awaited<ReturnType<typeof LoadAssetContainerAsync>>;
+  private babyAssetsReady: Promise<void>;
 
   constructor(
     engine: Engine,
@@ -67,7 +72,9 @@ export class ArenaScene {
       this.scene,
     );
     key.intensity = 1.1;
-    this.buildArena();
+    this.buildPickingSurface();
+    this.babyAssetsReady = this.loadBabyAssets();
+    void this.loadArenaAssets();
   }
 
   enableSpectatorControls(canvas: HTMLCanvasElement): void {
@@ -179,137 +186,52 @@ export class ArenaScene {
     return length > 0.01 ? { x: dx / length, z: dz / length } : undefined;
   }
 
-  private buildArena(): void {
+  private buildPickingSurface(): void {
     const groundCoral = MeshBuilder.CreateBox(
       "ground-coral",
       { width: 36, height: 0.7, depth: 25 },
       this.scene,
     );
     groundCoral.position.set(0, -0.35, -15.5);
-    groundCoral.material = this.material("ground-coral", COLORS.sand);
+    groundCoral.visibility = 0;
     const groundTeal = groundCoral.clone("ground-teal")!;
     groundTeal.position.z = 15.5;
-    for (const [team, z, color] of [
-      ["coral", -2.8, COLORS.coral],
-      ["teal", 2.8, COLORS.teal],
-    ] as const) {
-      const trim = MeshBuilder.CreateBox(
-        `trim-${team}`,
-        { width: 36, height: 0.18, depth: 0.55 },
-        this.scene,
-      );
-      trim.position.set(0, 0.1, z);
-      trim.material = this.material(`team-${team}`, color);
-    }
-    const river = MeshBuilder.CreateBox(
-      "river",
-      { width: 36, height: 0.35, depth: TUNING.riverHalfWidth * 2 },
+  }
+
+  private async loadArenaAssets(): Promise<void> {
+    const result = await ImportMeshAsync(
+      "/assets/models/baby_warz_arena_optimized.glb",
       this.scene,
     );
-    river.position.y = -0.75;
-    river.material = this.material("river", COLORS.indigo, 0.35);
-    for (const z of [-TUNING.riverHalfWidth, TUNING.riverHalfWidth]) {
-      const edge = MeshBuilder.CreateBox(
-        `river-edge-${z}`,
-        { width: 36, height: 0.12, depth: 0.18 },
-        this.scene,
-      );
-      edge.position.set(0, -0.22, z);
-      edge.material = this.material("cyan", COLORS.cyan, 0.3);
-    }
-    for (const x of [-12, -4, 4, 12])
-      for (const z of [-10, 10]) {
-        const cover = MeshBuilder.CreateBox(
-          `cover-${x}-${z}`,
-          { width: 3.2, height: 1.5, depth: 2.1 },
-          this.scene,
-        );
-        cover.position.set(x, 0.75, z);
-        cover.rotation.y = x * 0.03;
-        cover.material = this.material("cover", COLORS.cream);
-      }
-    for (const team of ["coral", "teal"] as const)
-      for (const spawn of BALL_SPAWNS[team]) {
-        const pad = MeshBuilder.CreateCylinder(
-          `ball-pad-${team}`,
-          { diameter: 1.4, height: 0.12 },
-          this.scene,
-        );
-        pad.position.set(spawn.x, 0.05, spawn.z);
-        pad.material = this.material(`team-${team}`, COLORS[team]);
-      }
-    for (const team of ["coral", "teal"] as const)
-      for (const spawn of FOOD_SPAWNS[team]) {
-        const pad = MeshBuilder.CreateCylinder(
-          `food-pad-${team}`,
-          { diameter: 1.6, height: 0.16 },
-          this.scene,
-        );
-        pad.position.set(spawn.x, 0.08, spawn.z);
-        pad.material = this.material("gold", COLORS.gold);
-      }
+    for (const node of result.transformNodes)
+      if (node.name.startsWith("COL_")) node.setEnabled(false);
+    for (const mesh of result.meshes) mesh.isPickable = false;
+  }
+
+  private async loadBabyAssets(): Promise<void> {
+    this.babyAssets = await LoadAssetContainerAsync(
+      "/assets/models/baby_warz_production_candidate.glb",
+      this.scene,
+    );
   }
 
   private createBaby(id: string, team: "coral" | "teal"): TransformNode {
     const root = new TransformNode(id, this.scene);
     this.entities.set(id, root);
-    const body = MeshBuilder.CreateSphere(
-      `${id}-body`,
-      { diameterX: 1.65, diameterY: 1.95, diameterZ: 1.4, segments: 12 },
-      this.scene,
-    );
-    body.position.y = 0.15;
-    body.parent = root;
-    body.material = this.material("skin", COLORS.skin);
-    const head = MeshBuilder.CreateSphere(
-      `${id}-head`,
-      { diameter: 1.55, segments: 12 },
-      this.scene,
-    );
-    head.position.y = 1.35;
-    head.parent = root;
-    head.material = this.material("skin", COLORS.skin);
-    const bib = MeshBuilder.CreateSphere(
-      `${id}-bib`,
-      {
-        diameterX: 1.4,
-        diameterY: 0.75,
-        diameterZ: 1.48,
-        segments: 10,
-        slice: 0.55,
-      },
-      this.scene,
-    );
-    bib.position.set(0, 0.55, 0.08);
-    bib.parent = root;
-    bib.material = this.material(`team-${team}`, COLORS[team]);
-    const diaper = MeshBuilder.CreateSphere(
-      `${id}-diaper`,
-      { diameterX: 1.8, diameterY: 1.15, diameterZ: 1.65, segments: 10 },
-      this.scene,
-    );
-    diaper.position.y = -0.55;
-    diaper.parent = root;
-    diaper.material = this.material("diaper", COLORS.cream);
-    for (const side of [-1, 1]) {
-      const hand = MeshBuilder.CreateSphere(
-        `${id}-${side < 0 ? "left-hook" : "right-ball"}-hand`,
-        { diameter: 0.48, segments: 8 },
-        this.scene,
+    void this.babyAssetsReady.then(() => {
+      if (root.isDisposed() || !this.babyAssets) return;
+      const instance = this.babyAssets.instantiateModelsToScene(
+        (name) => `${id}-${name}`,
+        true,
       );
-      hand.position.set(side * 1.05, 0.2, 0.05);
-      hand.parent = root;
-      hand.material = this.material("skin", COLORS.skin);
-      const band = MeshBuilder.CreateTorus(
-        `${id}-band-${side}`,
-        { diameter: 0.5, thickness: 0.12, tessellation: 10 },
-        this.scene,
-      );
-      band.position.set(side * 0.86, 0.2, 0.05);
-      band.rotation.z = Math.PI / 2;
-      band.parent = root;
-      band.material = this.material(`team-${team}`, COLORS[team]);
-    }
+      for (const node of instance.rootNodes) node.parent = root;
+      for (const node of root.getChildTransformNodes(false))
+        if (node.name.includes("COL_")) node.setEnabled(false);
+      for (const animation of instance.animationGroups) {
+        if (animation.name.includes("ANIM_Idle")) animation.start(true);
+      }
+      root.metadata = { team };
+    });
     return root;
   }
 
