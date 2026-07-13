@@ -13,6 +13,7 @@ const escapeHtml = (value: string) =>
 export class AppUi {
   private joined = false;
   private lastLobbyKey = "";
+  private lastSummaryKey = "";
   constructor(
     private readonly root: HTMLElement,
     private readonly network: NetworkClient,
@@ -51,6 +52,8 @@ export class AppUi {
     identity: Identity | undefined,
   ): void {
     if (!snapshot || !identity) return;
+    if (snapshot.phase !== "lobby") this.lastLobbyKey = "";
+    if (snapshot.phase !== "summary") this.lastSummaryKey = "";
     const me = snapshot.players.find((player) => player.id === identity.id);
     const notice = this.network.notice
       ? `<div class="notice">${escapeHtml(this.network.notice)}</div>`
@@ -86,6 +89,22 @@ export class AppUi {
       return;
     }
     if (snapshot.phase === "summary") {
+      const summaryKey = JSON.stringify({
+        hostId: snapshot.hostId,
+        winner: snapshot.winner,
+        players: snapshot.players.map(
+          ({ id, name, role, hitsDealt, hitsReceived, foods }) => ({
+            id,
+            name,
+            role,
+            hitsDealt,
+            hitsReceived,
+            foods,
+          }),
+        ),
+      });
+      if (summaryKey === this.lastSummaryKey) return;
+      this.lastSummaryKey = summaryKey;
       const rows = snapshot.players
         .filter((player) => player.role === "player")
         .map(

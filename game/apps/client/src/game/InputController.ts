@@ -1,5 +1,9 @@
 import type { InputCommand } from "@baby-warz/shared";
 
+const isEditableTarget = (target: EventTarget | null): boolean =>
+  target instanceof HTMLElement &&
+  (target.matches("input, textarea, select") || target.isContentEditable);
+
 export class InputController {
   private readonly keys = new Set<string>();
   private sequence = 0;
@@ -11,6 +15,8 @@ export class InputController {
 
   constructor(canvas: HTMLCanvasElement) {
     window.addEventListener("keydown", (event) => {
+      if (isEditableTarget(event.target)) return;
+
       if (
         [
           "KeyW",
