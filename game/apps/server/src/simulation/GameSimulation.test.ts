@@ -61,6 +61,14 @@ describe("authoritative match simulation", () => {
     expect(game.phase).toBe("summary");
   });
 
+  it("keeps players out of the authored low-cover blockers", () => {
+    game.startMatch("host", 0);
+    const host = game.players.get("host")!;
+    host.position = { x: -9.2, y: 1.1, z: -15.4 };
+    game.step(50, 0.05);
+    expect(host.position.z <= -17.85 || host.position.z >= -12.95).toBe(true);
+  });
+
   it("resolves the 30-minute limit by survivors and allows a draw", () => {
     game.startMatch("host", 0);
     game.step(TUNING.matchDurationMs + 1, 0.05);

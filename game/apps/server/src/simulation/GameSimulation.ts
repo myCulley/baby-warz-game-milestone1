@@ -1,5 +1,6 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import {
+  ARENA_BLOCKERS,
   BALL_SPAWNS,
   FOOD_IDS,
   FOOD_SPAWNS,
@@ -287,6 +288,7 @@ export class GameSimulation {
       -TUNING.arenaHalfLength + 1,
       TUNING.arenaHalfLength - 1,
     );
+    this.resolveArenaBlockers(player);
     if (player.position.y <= 1.1 * modifiers.scale) {
       player.position.y = 1.1 * modifiers.scale;
       player.velocity.y = 0;
@@ -448,6 +450,7 @@ export class GameSimulation {
     ball.position.x += ball.velocity.x * dt;
     ball.position.y += ball.velocity.y * dt;
     ball.position.z += ball.velocity.z * dt;
+    this.resolveBallBlockers(ball);
     if (
       Math.abs(ball.position.x) > TUNING.arenaHalfWidth - 0.35 ||
       Math.abs(ball.position.z) > TUNING.arenaHalfLength - 0.35
@@ -644,6 +647,80 @@ export class GameSimulation {
         right.position.x += (dx / distance) * overlap * (leftMass / totalMass);
         right.position.z += (dz / distance) * overlap * (leftMass / totalMass);
       }
+    }
+  }
+  private resolveArenaBlockers(player: PlayerRuntime): void {
+    const radius = TUNING.playerRadius * foodModifiers(player.foods).scale;
+    for (const blocker of ARENA_BLOCKERS) {
+      const nearestX = clamp(
+        player.position.x,
+        blocker.centerX - blocker.halfWidth,
+        blocker.centerX + blocker.halfWidth,
+      );
+      const nearestZ = clamp(
+        player.position.z,
+        blocker.centerZ - blocker.halfLength,
+        blocker.centerZ + blocker.halfLength,
+      );
+      const dx = player.position.x - nearestX;
+      const dz = player.position.z - nearestZ;
+      if (dx * dx + dz * dz >= radius * radius) continue;
+      const pushX =
+        blocker.halfWidth +
+        radius -
+        Math.abs(player.position.x - blocker.centerX);
+      const pushZ =
+        blocker.halfLength +
+        radius -
+        Math.abs(player.position.z - blocker.centerZ);
+      if (pushX < pushZ) {
+        player.position.x =
+          blocker.centerX +
+          Math.sign(player.position.x - blocker.centerX || 1) *
+            (blocker.halfWidth + radius);
+        player.velocity.x = 0;
+      } else {
+        player.position.z =
+          blocker.centerZ +
+          Math.sign(player.position.z - blocker.centerZ || 1) *
+            (blocker.halfLength + radius);
+        player.velocity.z = 0;
+      }
+    }
+  }
+  private resolveBallBlockers(ball: BallRuntime): void {
+    const radius = 0.39;
+    for (const blocker of ARENA_BLOCKERS) {
+      if (
+        ball.position.x < blocker.centerX - blocker.halfWidth - radius ||
+        ball.position.x > blocker.centerX + blocker.halfWidth + radius ||
+        ball.position.z < blocker.centerZ - blocker.halfLength - radius ||
+        ball.position.z > blocker.centerZ + blocker.halfLength + radius ||
+        ball.position.y > 2.1
+      )
+        continue;
+      const overlapX =
+        blocker.halfWidth +
+        radius -
+        Math.abs(ball.position.x - blocker.centerX);
+      const overlapZ =
+        blocker.halfLength +
+        radius -
+        Math.abs(ball.position.z - blocker.centerZ);
+      if (overlapX < overlapZ) {
+        ball.position.x =
+          blocker.centerX +
+          Math.sign(ball.position.x - blocker.centerX || 1) *
+            (blocker.halfWidth + radius);
+        ball.velocity.x *= -0.65;
+      } else {
+        ball.position.z =
+          blocker.centerZ +
+          Math.sign(ball.position.z - blocker.centerZ || 1) *
+            (blocker.halfLength + radius);
+        ball.velocity.z *= -0.65;
+      }
+      ball.bounceCount += 1;
     }
   }
   private spawnBall(team: Team, spawnIndex: number): void {

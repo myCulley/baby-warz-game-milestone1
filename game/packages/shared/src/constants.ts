@@ -35,22 +35,63 @@ export const TUNING = {
   reconciliationSnapDistance: 2.5,
 } as const;
 
+export interface ArenaBlocker {
+  id: string;
+  centerX: number;
+  centerZ: number;
+  halfWidth: number;
+  halfLength: number;
+}
+
+// Authored in vertical-slice-2/arena-layout.json. These simple boxes are the
+// server contract; the detailed visual mesh is never used for collision.
+export const ARENA_BLOCKERS: readonly ArenaBlocker[] = [
+  {
+    id: "coral-west-cover",
+    centerX: -9.2,
+    centerZ: -15.4,
+    halfWidth: 3,
+    halfLength: 1.7,
+  },
+  {
+    id: "coral-east-cover",
+    centerX: 9,
+    centerZ: -9,
+    halfWidth: 3,
+    halfLength: 1.7,
+  },
+  {
+    id: "teal-west-cover",
+    centerX: -9,
+    centerZ: 9,
+    halfWidth: 3,
+    halfLength: 1.7,
+  },
+  {
+    id: "teal-east-cover",
+    centerX: 9.2,
+    centerZ: 15.4,
+    halfWidth: 3,
+    halfLength: 1.7,
+  },
+] as const;
+
 export const TEAM_SPAWNS: Record<Team, Vec3[]> = {
   coral: [
-    { x: -12, y: 1.1, z: -21 },
-    { x: -7, y: 1.1, z: -23 },
-    { x: -2, y: 1.1, z: -21 },
-    { x: 3, y: 1.1, z: -23 },
-    { x: 8, y: 1.1, z: -21 },
-    { x: 13, y: 1.1, z: -23 },
+    { x: -2.25, y: 1.1, z: -23.8 },
+    { x: 0, y: 1.1, z: -23.8 },
+    { x: 2.25, y: 1.1, z: -23.8 },
+    { x: -2.25, y: 1.1, z: -21.55 },
+    { x: 0, y: 1.1, z: -21.55 },
+    { x: 2.25, y: 1.1, z: -21.55 },
   ],
   teal: [
-    { x: -12, y: 1.1, z: 21 },
-    { x: -7, y: 1.1, z: 23 },
-    { x: -2, y: 1.1, z: 21 },
-    { x: 3, y: 1.1, z: 23 },
-    { x: 8, y: 1.1, z: 21 },
-    { x: 13, y: 1.1, z: 23 },
+    { x: -2.25, y: 1.1, z: 23.8 },
+    { x: 0, y: 1.1, z: 23.8 },
+    { x: 2.25, y: 1.1, z: 23.8 },
+    { x: -2.25, y: 1.1, z: 21.55 },
+    { x: 0, y: 1.1, z: 21.55 },
+    { x: 2.25, y: 1.1, z: 21.55 },
   ],
 };
 
@@ -69,13 +110,13 @@ export const BALL_SPAWNS: Record<Team, Vec3[]> = {
 
 export const FOOD_SPAWNS: Record<Team, Vec3[]> = {
   coral: [
-    { x: -11, y: 0.6, z: -12 },
-    { x: 0, y: 0.6, z: -15 },
-    { x: 11, y: 0.6, z: -12 },
+    { x: -8, y: 0.62, z: -6 },
+    { x: 0, y: 0.62, z: -10 },
+    { x: 8, y: 0.62, z: -6 },
   ],
   teal: [
-    { x: -11, y: 0.6, z: 12 },
-    { x: 0, y: 0.6, z: 15 },
-    { x: 11, y: 0.6, z: 12 },
+    { x: -8, y: 0.62, z: 6 },
+    { x: 0, y: 0.62, z: 10 },
+    { x: 8, y: 0.62, z: 6 },
   ],
 };

@@ -199,13 +199,22 @@ export class ArenaScene {
   }
 
   private async loadArenaAssets(): Promise<void> {
-    const result = await ImportMeshAsync(
-      "/assets/models/baby_warz_arena_optimized.glb",
-      this.scene,
-    );
-    for (const node of result.transformNodes)
-      if (node.name.startsWith("COL_")) node.setEnabled(false);
-    for (const mesh of result.meshes) mesh.isPickable = false;
+    const [visual, collision] = await Promise.all([
+      ImportMeshAsync(
+        "/assets/models/baby_warz_vertical_slice_2_visual.glb",
+        this.scene,
+      ),
+      ImportMeshAsync(
+        "/assets/models/baby_warz_vertical_slice_2_collision.glb",
+        this.scene,
+      ),
+    ]);
+    for (const mesh of visual.meshes) mesh.isPickable = false;
+    for (const node of collision.transformNodes) node.setEnabled(false);
+    for (const mesh of collision.meshes) {
+      mesh.isPickable = false;
+      mesh.setEnabled(false);
+    }
   }
 
   private async loadBabyAssets(): Promise<void> {
