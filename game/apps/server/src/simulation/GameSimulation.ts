@@ -33,7 +33,7 @@ interface PlayerRuntime extends PlayerSnapshot {
 
 interface BallRuntime extends BallSnapshot {
   spawnIndex: number;
-  restingSince?: number;
+  thrownAt?: number;
   hitPlayerId?: string;
   throwerId?: string;
 }
@@ -255,7 +255,7 @@ export class GameSimulation {
         }) => ({ ...value }),
       ),
       balls: [...this.balls.values()].map(
-        ({ spawnIndex: _i, restingSince: _r, hitPlayerId: _h, ...value }) => ({
+        ({ spawnIndex: _i, thrownAt: _t, hitPlayerId: _h, ...value }) => ({
           ...value,
         }),
       ),
@@ -370,6 +370,7 @@ export class GameSimulation {
       active: true,
       bounceCount: 0,
       spawnIndex: 0,
+      thrownAt: now,
       throwerId: player.id,
     };
     this.balls.set(ball.id, ball);
@@ -457,6 +458,13 @@ export class GameSimulation {
 
   private stepBall(ball: BallRuntime, now: number, dt: number): void {
     if (ball.heldBy) return;
+    if (
+      ball.thrownAt !== undefined &&
+      now - ball.thrownAt >= TUNING.ballDespawnMs
+    ) {
+      this.respawnBall(ball);
+      return;
+    }
     ball.velocity.y += TUNING.gravity * dt;
     ball.position.x += ball.velocity.x * dt;
     ball.position.y += ball.velocity.y * dt;
@@ -522,7 +530,8 @@ export class GameSimulation {
         ball.hitPlayerId = player.id;
         ball.active = false;
         if (player.hearts <= 0) this.eliminate(player);
-        break;
+        this.respawnBall(ball);
+        return;
       }
     }
     for (const player of this.activePlayers()) {
@@ -537,14 +546,6 @@ export class GameSimulation {
       this.balls.delete(ball.id);
       return;
     }
-    const speed = Math.hypot(ball.velocity.x, ball.velocity.y, ball.velocity.z);
-    if (speed < TUNING.ballRestSpeed) ball.restingSince ??= now;
-    else ball.restingSince = undefined;
-    if (
-      ball.restingSince &&
-      now - ball.restingSince >= TUNING.ballRestRespawnMs
-    )
-      this.respawnBall(ball);
   }
 
   private stepFoods(now: number): void {
@@ -756,8 +757,9 @@ export class GameSimulation {
     ball.velocity = { x: 0, y: 0, z: 0 };
     ball.active = false;
     ball.bounceCount = TUNING.maxTerrainBounces;
-    ball.restingSince = undefined;
+    ball.thrownAt = undefined;
     ball.hitPlayerId = undefined;
+    ball.throwerId = undefined;
   }
   private teamPlayers(team: Team): PlayerRuntime[] {
     return this.activePlayers().filter((player) => player.team === team);

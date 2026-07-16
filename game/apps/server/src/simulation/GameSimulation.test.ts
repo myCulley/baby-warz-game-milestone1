@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { TUNING } from "@baby-warz/shared";
+import { BALL_SPAWNS, TUNING } from "@baby-warz/shared";
 import { GameSimulation } from "./GameSimulation.js";
 
 describe("authoritative match simulation", () => {
@@ -30,6 +30,70 @@ describe("authoritative match simulation", () => {
       food.position = { ...host.position };
     game.step(100, 0.05);
     expect(host.foods).toHaveLength(3);
+  });
+
+  it("respawns a missed throw three seconds after release", () => {
+    game.startMatch("host", 0);
+    game.balls.clear();
+    const host = game.players.get("host")!;
+    host.balls = 1;
+    game.queueInput("host", {
+      sequence: 1,
+      moveX: 0,
+      moveZ: 0,
+      aimX: 1,
+      aimZ: 0,
+      jump: false,
+      sprint: false,
+      throwBall: true,
+      hook: false,
+    });
+
+    game.step(0, 0.05);
+    const thrown = [...game.balls.values()][0]!;
+    expect(thrown.active).toBe(true);
+
+    game.step(TUNING.ballDespawnMs - 1, 0);
+    expect(thrown.active).toBe(true);
+
+    game.step(TUNING.ballDespawnMs, 0);
+    expect(thrown.active).toBe(false);
+    expect(thrown.position).toEqual(BALL_SPAWNS.coral[0]);
+  });
+
+  it("counts an enemy hit and immediately respawns the ball", () => {
+    game.startMatch("host", 0);
+    game.balls.clear();
+    const host = game.players.get("host")!;
+    const guest = game.players.get("guest")!;
+    host.balls = 1;
+    guest.position = {
+      x: host.position.x + 1.2,
+      y: host.position.y + 0.45,
+      z: host.position.z,
+    };
+    game.queueInput("host", {
+      sequence: 1,
+      moveX: 0,
+      moveZ: 0,
+      aimX: 1,
+      aimZ: 0,
+      jump: false,
+      sprint: false,
+      throwBall: true,
+      hook: false,
+    });
+
+    game.step(0, 0);
+
+    expect(host.hitsDealt).toBe(1);
+    expect(guest.hitsReceived).toBe(1);
+    expect(guest.hearts).toBe(TUNING.baseHearts - 1);
+    expect([...game.balls.values()]).toHaveLength(1);
+    expect([...game.balls.values()][0]).toMatchObject({
+      active: false,
+      position: BALL_SPAWNS.coral[0],
+    });
   });
 
   it("ignores stale and duplicate input sequences", () => {
