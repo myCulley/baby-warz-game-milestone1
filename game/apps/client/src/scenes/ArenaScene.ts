@@ -44,6 +44,8 @@ export class ArenaScene {
   private hookMeshes: Mesh[] = [];
   private babyAssets?: Awaited<ReturnType<typeof LoadAssetContainerAsync>>;
   private babyAssetsReady: Promise<void>;
+  private ballAssets?: Awaited<ReturnType<typeof LoadAssetContainerAsync>>;
+  private ballAssetsReady: Promise<void>;
 
   constructor(
     engine: Engine,
@@ -74,6 +76,7 @@ export class ArenaScene {
     key.intensity = 1.1;
     this.buildPickingSurface();
     this.babyAssetsReady = this.loadBabyAssets();
+    this.ballAssetsReady = this.loadBallAssets();
     void this.loadArenaAssets();
   }
 
@@ -118,6 +121,10 @@ export class ArenaScene {
         diaper.scaling.x = 1 + player.foods.length * 0.12;
         diaper.scaling.z = 1 + player.foods.length * 0.16;
       }
+      const heldBall = node
+        .getChildTransformNodes(false)
+        .find((value) => value.name === `${player.id}-held-ball`);
+      heldBall?.setEnabled(player.balls > 0);
       seen.add(player.id);
       if (player.id === this.localId() && !this.isSpectator())
         this.camera.target = Vector3.Lerp(
@@ -224,9 +231,22 @@ export class ArenaScene {
     );
   }
 
+  private async loadBallAssets(): Promise<void> {
+    this.ballAssets = await LoadAssetContainerAsync(
+      "/assets/models/ball.glb",
+      this.scene,
+    );
+  }
+
   private createBaby(id: string, team: "coral" | "teal"): TransformNode {
     const root = new TransformNode(id, this.scene);
     this.entities.set(id, root);
+    const heldBall = new TransformNode(`${id}-held-ball`, this.scene);
+    heldBall.parent = root;
+    heldBall.position.set(0.64, 0.72, 0.02);
+    heldBall.scaling.setAll(0.39);
+    heldBall.setEnabled(false);
+    this.instantiateBallModel(heldBall, `${id}-held`);
     void this.babyAssetsReady.then(() => {
       if (root.isDisposed() || !this.babyAssets) return;
       const instance = this.babyAssets.instantiateModelsToScene(
@@ -245,14 +265,23 @@ export class ArenaScene {
   }
 
   private createBall(id: string): TransformNode {
-    const ball = MeshBuilder.CreateSphere(
-      id,
-      { diameter: 0.78, segments: 12 },
-      this.scene,
-    );
-    ball.material = this.material("ball", "#e94f37", 0.15);
-    this.entities.set(id, ball);
-    return ball;
+    const root = new TransformNode(id, this.scene);
+    root.scaling.setAll(0.39);
+    this.entities.set(id, root);
+    this.instantiateBallModel(root, id);
+    return root;
+  }
+
+  private instantiateBallModel(parent: TransformNode, id: string): void {
+    void this.ballAssetsReady.then(() => {
+      if (parent.isDisposed() || !this.ballAssets) return;
+      const instance = this.ballAssets.instantiateModelsToScene(
+        (name) => `${id}-${name}`,
+        false,
+      );
+      for (const node of instance.rootNodes) node.parent = parent;
+      for (const mesh of parent.getChildMeshes(false)) mesh.isPickable = false;
+    });
   }
   private createFood(id: string, food: string): TransformNode {
     const root = new TransformNode(id, this.scene);
