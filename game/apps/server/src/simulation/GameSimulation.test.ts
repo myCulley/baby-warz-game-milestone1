@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { BALL_SPAWNS, TUNING } from "@baby-warz/shared";
+import { TUNING } from "@baby-warz/shared";
 import { GameSimulation } from "./GameSimulation.js";
 
 describe("authoritative match simulation", () => {
@@ -32,7 +32,7 @@ describe("authoritative match simulation", () => {
     expect(host.foods).toHaveLength(3);
   });
 
-  it("respawns a missed throw three seconds after release", () => {
+  it("despawns a missed throw after three motionless seconds", () => {
     game.startMatch("host", 0);
     game.balls.clear();
     const host = game.players.get("host")!;
@@ -53,15 +53,49 @@ describe("authoritative match simulation", () => {
     const thrown = [...game.balls.values()][0]!;
     expect(thrown.active).toBe(true);
 
-    game.step(TUNING.ballDespawnMs - 1, 0);
-    expect(thrown.active).toBe(true);
-
-    game.step(TUNING.ballDespawnMs, 0);
+    thrown.velocity = { x: 0, y: 0, z: 0 };
+    thrown.position.y = 0.4;
+    game.step(1_000, 0);
     expect(thrown.active).toBe(false);
-    expect(thrown.position).toEqual(BALL_SPAWNS.coral[0]);
+    expect(game.snapshot(1_000).balls).toHaveLength(1);
+
+    game.step(1_000 + TUNING.ballMotionlessDespawnMs - 1, 0);
+    expect(thrown.active).toBe(false);
+    expect(game.snapshot(3_999).balls).toHaveLength(1);
+
+    game.step(1_000 + TUNING.ballMotionlessDespawnMs, 0);
+    expect(game.snapshot(4_000).balls).toHaveLength(0);
   });
 
-  it("counts an enemy hit and immediately respawns the ball", () => {
+  it("keeps a thrown ball threatening while it is still moving", () => {
+    game.startMatch("host", 0);
+    game.balls.clear();
+    const host = game.players.get("host")!;
+    host.balls = 1;
+    game.queueInput("host", {
+      sequence: 1,
+      moveX: 0,
+      moveZ: 0,
+      aimX: 1,
+      aimZ: 0,
+      jump: false,
+      sprint: false,
+      throwBall: true,
+      hook: false,
+    });
+
+    game.step(0, 0);
+    const thrown = [...game.balls.values()][0]!;
+    thrown.velocity = { x: 1, y: 0, z: 0 };
+    game.step(TUNING.ballMotionlessDespawnMs + 1, 0);
+
+    expect(thrown.active).toBe(true);
+    expect(
+      game.snapshot(TUNING.ballMotionlessDespawnMs + 1).balls,
+    ).toHaveLength(1);
+  });
+
+  it("counts a moving enemy contact and despawns the ball immediately", () => {
     game.startMatch("host", 0);
     game.balls.clear();
     const host = game.players.get("host")!;
@@ -89,11 +123,7 @@ describe("authoritative match simulation", () => {
     expect(host.hitsDealt).toBe(1);
     expect(guest.hitsReceived).toBe(1);
     expect(guest.hearts).toBe(TUNING.baseHearts - 1);
-    expect([...game.balls.values()]).toHaveLength(1);
-    expect([...game.balls.values()][0]).toMatchObject({
-      active: false,
-      position: BALL_SPAWNS.coral[0],
-    });
+    expect(game.snapshot(0).balls).toHaveLength(0);
   });
 
   it("does not turn a bounced projectile into an enemy pickup", () => {
@@ -124,10 +154,123 @@ describe("authoritative match simulation", () => {
     expect(guest.balls).toBe(0);
     expect(guest.hitsReceived).toBe(1);
     expect(host.hitsDealt).toBe(1);
-    expect(thrown).toMatchObject({
-      active: false,
-      position: BALL_SPAWNS.coral[0],
+    expect(game.snapshot(50).balls).toHaveLength(0);
+  });
+
+  it("starts a 1v1 with one ball per side and supplies up to team capacity", () => {
+    game.startMatch("host", 0);
+    expect(
+      [...game.balls.values()].filter((ball) => ball.team === "coral"),
+    ).toHaveLength(1);
+    expect(
+      [...game.balls.values()].filter((ball) => ball.team === "teal"),
+    ).toHaveLength(1);
+
+    const host = game.players.get("host")!;
+    const first = [...game.balls.values()].find(
+      (ball) => ball.team === "coral",
+    )!;
+    first.position = { ...host.position };
+    game.step(1, 0);
+    expect(host.balls).toBe(1);
+
+    game.step(TUNING.ballSpawnIntervalMs - 1, 0);
+    expect(
+      [...game.balls.values()].filter((ball) => ball.team === "coral"),
+    ).toHaveLength(0);
+    game.step(TUNING.ballSpawnIntervalMs, 0);
+    const second = [...game.balls.values()].find(
+      (ball) => ball.team === "coral",
+    )!;
+    second.position = { ...host.position };
+    game.step(TUNING.ballSpawnIntervalMs + 1, 0);
+    expect(host.balls).toBe(2);
+
+    game.step(TUNING.ballSpawnIntervalMs * 2, 0);
+    const third = [...game.balls.values()].find(
+      (ball) => ball.team === "coral",
+    )!;
+    third.position = { ...host.position };
+    game.step(TUNING.ballSpawnIntervalMs * 2 + 1, 0);
+    expect(host.balls).toBe(3);
+
+    game.step(TUNING.ballSpawnIntervalMs * 3, 0);
+    expect(
+      [...game.balls.values()].filter((ball) => ball.team === "coral"),
+    ).toHaveLength(0);
+  });
+
+  it("leaves an untouched spawn ball on its pad indefinitely", () => {
+    game.startMatch("host", 0);
+    game.step(5 * 60_000, 0);
+    expect(
+      [...game.balls.values()].filter((ball) => ball.team === "coral"),
+    ).toHaveLength(1);
+  });
+
+  it("bounces a moving throw off a friendly player without damage", () => {
+    game.addPlayer("friend", "Friend", "player", 0);
+    game.setTeam("friend", "coral");
+    game.startMatch("host", 0);
+    game.balls.clear();
+    const host = game.players.get("host")!;
+    const friend = game.players.get("friend")!;
+    game.balls.set("friendly", {
+      id: "friendly",
+      team: "coral",
+      position: { ...friend.position },
+      velocity: { x: 5, y: 0, z: 0 },
+      active: true,
+      bounceCount: 0,
+      spawnIndex: 0,
+      thrownAt: 0,
+      throwerId: host.id,
     });
+
+    game.step(50, 0);
+
+    const ball = game.balls.get("friendly")!;
+    expect(friend.hitsReceived).toBe(0);
+    expect(friend.hearts).toBe(TUNING.baseHearts);
+    expect(ball.bounceCount).toBe(1);
+    expect(ball.velocity.x).toBeLessThan(0);
+  });
+
+  it("lets a grappling hook catch a moving enemy ball without taking a hit", () => {
+    game.startMatch("host", 0);
+    game.balls.clear();
+    const host = game.players.get("host")!;
+    const guest = game.players.get("guest")!;
+    guest.position = { x: 0, y: 1.1, z: 0 };
+    guest.facing = 0;
+    game.balls.set("hookable", {
+      id: "hookable",
+      team: "coral",
+      position: { x: 0, y: 1.1, z: 5 },
+      velocity: { x: 0, y: 0, z: -10 },
+      active: true,
+      bounceCount: 0,
+      spawnIndex: 0,
+      thrownAt: 0,
+      throwerId: host.id,
+    });
+    game.queueInput("guest", {
+      sequence: 1,
+      moveX: 0,
+      moveZ: 0,
+      aimX: 0,
+      aimZ: 1,
+      jump: false,
+      sprint: false,
+      throwBall: false,
+      hook: true,
+    });
+
+    game.step(50, 0.05);
+
+    expect(guest.balls).toBe(1);
+    expect(guest.hitsReceived).toBe(0);
+    expect(game.balls.has("hookable")).toBe(false);
   });
 
   it("ignores stale and duplicate input sequences", () => {

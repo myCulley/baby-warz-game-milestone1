@@ -34,6 +34,7 @@ interface PlayerRuntime extends PlayerSnapshot {
 interface BallRuntime extends BallSnapshot {
   spawnIndex: number;
   thrownAt?: number;
+  motionlessSince?: number;
   hitPlayerId?: string;
   throwerId?: string;
 }
@@ -65,6 +66,7 @@ export class GameSimulation {
   matchStartedAt = 0;
   private nextEntity = 1;
   private rapierReady = false;
+  private readonly nextBallSpawnAt = new Map<string, number>();
 
   async initializePhysics(): Promise<void> {
     await RAPIER.init();
@@ -163,6 +165,7 @@ export class GameSimulation {
     this.winner = undefined;
     this.matchStartedAt = now;
     this.balls.clear();
+    this.nextBallSpawnAt.clear();
     this.foods.clear();
     this.hooks.clear();
     for (const team of ["coral", "teal"] as const) {
@@ -180,6 +183,10 @@ export class GameSimulation {
         player.hitsDealt = 0;
         player.hitsReceived = 0;
         this.spawnBall(team, index);
+        this.nextBallSpawnAt.set(
+          this.ballSpawnerId(team, index),
+          now + TUNING.ballSpawnIntervalMs,
+        );
       });
       this.refreshFoodSpawns(team, now);
     }
@@ -190,6 +197,7 @@ export class GameSimulation {
     this.phase = "lobby";
     this.winner = undefined;
     this.balls.clear();
+    this.nextBallSpawnAt.clear();
     this.foods.clear();
     this.hooks.clear();
     for (const player of this.players.values()) {
@@ -227,6 +235,7 @@ export class GameSimulation {
     for (const player of this.activePlayers()) this.stepPlayer(player, now, dt);
     this.resolvePlayerCollisions();
     for (const ball of [...this.balls.values()]) this.stepBall(ball, now, dt);
+    this.stepBallSpawners(now);
     this.stepFoods(now);
     for (const [id, hook] of this.hooks) {
       hook.remainingMs -= dt * 1000;
@@ -255,9 +264,13 @@ export class GameSimulation {
         }) => ({ ...value }),
       ),
       balls: [...this.balls.values()].map(
-        ({ spawnIndex: _i, thrownAt: _t, hitPlayerId: _h, ...value }) => ({
-          ...value,
-        }),
+        ({
+          spawnIndex: _i,
+          thrownAt: _t,
+          motionlessSince: _m,
+          hitPlayerId: _h,
+          ...value
+        }) => ({ ...value }),
       ),
       foods: [...this.foods.values()].map(({ cycleAt: _c, ...value }) => ({
         ...value,
@@ -414,8 +427,8 @@ export class GameSimulation {
     }
     if (targetType === "ball" && targetId) {
       const ball = this.balls.get(targetId);
-      if (ball) {
-        if (player.balls < TUNING.maxBallSlots) player.balls += 1;
+      if (ball && player.balls < TUNING.maxBallSlots) {
+        player.balls += 1;
         this.balls.delete(ball.id);
         Object.assign(end, ball.position);
       }
@@ -458,13 +471,6 @@ export class GameSimulation {
 
   private stepBall(ball: BallRuntime, now: number, dt: number): void {
     if (ball.heldBy) return;
-    if (
-      ball.thrownAt !== undefined &&
-      now - ball.thrownAt >= TUNING.ballDespawnMs
-    ) {
-      this.respawnBall(ball);
-      return;
-    }
     ball.velocity.y += TUNING.gravity * dt;
     ball.position.x += ball.velocity.x * dt;
     ball.position.y += ball.velocity.y * dt;
@@ -501,7 +507,24 @@ export class GameSimulation {
       ball.velocity.x *= 0.94;
       ball.velocity.z *= 0.94;
     }
-    if (ball.active && !ball.hitPlayerId) {
+    const horizontalSpeedSquared = ball.velocity.x ** 2 + ball.velocity.z ** 2;
+    const isMoving =
+      horizontalSpeedSquared > TUNING.ballMotionlessSpeed ** 2 ||
+      ball.position.y > 0.401 ||
+      Math.abs(ball.velocity.y) > 1;
+    if (ball.thrownAt !== undefined) {
+      ball.active = isMoving;
+      if (isMoving) ball.motionlessSince = undefined;
+      else ball.motionlessSince ??= now;
+      if (
+        ball.motionlessSince !== undefined &&
+        now - ball.motionlessSince >= TUNING.ballMotionlessDespawnMs
+      ) {
+        this.balls.delete(ball.id);
+        return;
+      }
+    }
+    if (ball.thrownAt !== undefined && isMoving && !ball.hitPlayerId) {
       for (const player of this.activePlayers()) {
         if (
           player.eliminated ||
@@ -527,10 +550,18 @@ export class GameSimulation {
         player.velocity.x += incoming.x * impulse;
         player.velocity.z += incoming.z * impulse;
         ball.hitPlayerId = player.id;
-        ball.active = false;
         if (player.hearts <= 0) this.eliminate(player);
-        this.respawnBall(ball);
+        this.balls.delete(ball.id);
         return;
+      }
+      for (const player of this.teamPlayers(ball.team)) {
+        if (
+          player.eliminated ||
+          distanceSquared(player.position, ball.position) > 1.25 ** 2
+        )
+          continue;
+        this.bounceBallOffPlayer(ball, player);
+        break;
       }
     }
     for (const player of this.activePlayers()) {
@@ -737,7 +768,7 @@ export class GameSimulation {
   }
   private spawnBall(team: Team, spawnIndex: number): void {
     const position = copyVec3(
-      BALL_SPAWNS[team][spawnIndex] ?? BALL_SPAWNS[team][0]!,
+      BALL_SPAWNS[team][spawnIndex % BALL_SPAWNS[team].length]!,
     );
     const ball: BallRuntime = {
       id: `spawn-${team}-${spawnIndex}`,
@@ -750,16 +781,55 @@ export class GameSimulation {
     };
     this.balls.set(ball.id, ball);
   }
-  private respawnBall(ball: BallRuntime): void {
-    ball.position = copyVec3(
-      BALL_SPAWNS[ball.team][ball.spawnIndex] ?? BALL_SPAWNS[ball.team][0]!,
+  private stepBallSpawners(now: number): void {
+    for (const team of ["coral", "teal"] as const) {
+      const playerCount = this.teamPlayers(team).length;
+      for (let spawnIndex = 0; spawnIndex < playerCount; spawnIndex += 1) {
+        const spawnerId = this.ballSpawnerId(team, spawnIndex);
+        const nextSpawnAt = this.nextBallSpawnAt.get(spawnerId) ?? now;
+        if (now < nextSpawnAt) continue;
+        this.nextBallSpawnAt.set(spawnerId, now + TUNING.ballSpawnIntervalMs);
+        const padOccupied = [...this.balls.values()].some(
+          (ball) =>
+            ball.team === team &&
+            ball.thrownAt === undefined &&
+            ball.spawnIndex === spawnIndex,
+        );
+        if (padOccupied || this.teamBallCount(team) >= playerCount * 3)
+          continue;
+        this.spawnBall(team, spawnIndex);
+      }
+    }
+  }
+  private teamBallCount(team: Team): number {
+    const held = this.teamPlayers(team).reduce(
+      (total, player) => total + player.balls,
+      0,
     );
-    ball.velocity = { x: 0, y: 0, z: 0 };
-    ball.active = false;
-    ball.bounceCount = 0;
-    ball.thrownAt = undefined;
-    ball.hitPlayerId = undefined;
-    ball.throwerId = undefined;
+    const inWorld = [...this.balls.values()].filter(
+      (ball) => ball.team === team,
+    ).length;
+    return held + inWorld;
+  }
+  private ballSpawnerId(team: Team, spawnIndex: number): string {
+    return `${team}-${spawnIndex}`;
+  }
+  private bounceBallOffPlayer(ball: BallRuntime, player: PlayerRuntime): void {
+    let normal = normalized2(
+      ball.position.x - player.position.x,
+      ball.position.z - player.position.z,
+    );
+    if (normal.x === 0 && normal.z === 0)
+      normal = normalized2(-ball.velocity.x, -ball.velocity.z);
+    const towardPlayer =
+      ball.velocity.x * normal.x + ball.velocity.z * normal.z;
+    if (towardPlayer < 0) {
+      ball.velocity.x = (ball.velocity.x - 2 * towardPlayer * normal.x) * 0.7;
+      ball.velocity.z = (ball.velocity.z - 2 * towardPlayer * normal.z) * 0.7;
+    }
+    ball.position.x = player.position.x + normal.x * 1.26;
+    ball.position.z = player.position.z + normal.z * 1.26;
+    ball.bounceCount += 1;
   }
   private teamPlayers(team: Team): PlayerRuntime[] {
     return this.activePlayers().filter((player) => player.team === team);

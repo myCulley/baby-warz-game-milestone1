@@ -4,7 +4,7 @@ Rapier is initialized on the Node server and is the approved authoritative physi
 
 The browser's Babylon scene is presentation only. It does not decide hits, river deaths, food collection, ball capacity, hook catches, or match results. Visual bodies are corrected to each server snapshot.
 
-Important prototype rules are explicit: every direct active-ball contact removes one heart; a ball respawns immediately after hitting an enemy or three seconds after a missed throw; river contact immediately eliminates; hook pulls are mass-modified and server-owned; and visual scale follows the authoritative food-derived collider intent.
+Important prototype rules are explicit: each team has one ball pad per player; every pad checks at 30-second intervals and supplies a ball only when its pad is empty and the team has fewer than three balls per player across inventories and play; untouched pad balls remain indefinitely; every moving thrown-ball contact with an enemy removes one heart and despawns the ball; friendly contact deflects it without damage; a stopped throw can be collected and otherwise despawns after three motionless seconds; hooks can catch balls in any available state; river contact immediately eliminates; hook pulls are mass-modified and server-owned; and visual scale follows the authoritative food-derived collider intent.
 
 ## Arena environment
 
