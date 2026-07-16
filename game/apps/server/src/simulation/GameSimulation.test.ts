@@ -96,6 +96,40 @@ describe("authoritative match simulation", () => {
     });
   });
 
+  it("does not turn a bounced projectile into an enemy pickup", () => {
+    game.startMatch("host", 0);
+    game.balls.clear();
+    const host = game.players.get("host")!;
+    const guest = game.players.get("guest")!;
+    host.balls = 1;
+    game.queueInput("host", {
+      sequence: 1,
+      moveX: 0,
+      moveZ: 0,
+      aimX: 1,
+      aimZ: 0,
+      jump: false,
+      sprint: false,
+      throwBall: true,
+      hook: false,
+    });
+    game.step(0, 0.05);
+    const thrown = [...game.balls.values()][0]!;
+    thrown.bounceCount = 2;
+    thrown.position = { ...guest.position };
+    thrown.velocity = { x: 1, y: 0, z: 0 };
+
+    game.step(50, 0);
+
+    expect(guest.balls).toBe(0);
+    expect(guest.hitsReceived).toBe(1);
+    expect(host.hitsDealt).toBe(1);
+    expect(thrown).toMatchObject({
+      active: false,
+      position: BALL_SPAWNS.coral[0],
+    });
+  });
+
   it("ignores stale and duplicate input sequences", () => {
     game.startMatch("host", 0);
     const command = {

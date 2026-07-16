@@ -19,7 +19,6 @@ export const TUNING = {
   ballSpeed: 17,
   ballPickupRadius: 1.25,
   ballDespawnMs: 3000,
-  maxTerrainBounces: 2,
   hookCooldownMs: 3000,
   hookRange: 14,
   hookDurationMs: 500,

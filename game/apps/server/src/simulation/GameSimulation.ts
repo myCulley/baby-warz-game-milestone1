@@ -501,7 +501,6 @@ export class GameSimulation {
       ball.velocity.x *= 0.94;
       ball.velocity.z *= 0.94;
     }
-    if (ball.bounceCount >= TUNING.maxTerrainBounces) ball.active = false;
     if (ball.active && !ball.hitPlayerId) {
       for (const player of this.activePlayers()) {
         if (
@@ -536,6 +535,7 @@ export class GameSimulation {
     }
     for (const player of this.activePlayers()) {
       if (
+        ball.active ||
         player.eliminated ||
         player.balls >= TUNING.maxBallSlots ||
         distanceSquared(player.position, ball.position) >
@@ -745,7 +745,7 @@ export class GameSimulation {
       position,
       velocity: { x: 0, y: 0, z: 0 },
       active: false,
-      bounceCount: TUNING.maxTerrainBounces,
+      bounceCount: 0,
       spawnIndex,
     };
     this.balls.set(ball.id, ball);
@@ -756,7 +756,7 @@ export class GameSimulation {
     );
     ball.velocity = { x: 0, y: 0, z: 0 };
     ball.active = false;
-    ball.bounceCount = TUNING.maxTerrainBounces;
+    ball.bounceCount = 0;
     ball.thrownAt = undefined;
     ball.hitPlayerId = undefined;
     ball.throwerId = undefined;
