@@ -8,7 +8,6 @@ const log = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
 export class BabyWarzRoom extends Room {
   maxClients = TUNING.maxPlayers + TUNING.maxSpectators;
-  autoDispose = false;
   private readonly simulation = new GameSimulation();
 
   async onCreate(): Promise<void> {

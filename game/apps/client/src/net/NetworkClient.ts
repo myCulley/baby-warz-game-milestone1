@@ -59,6 +59,20 @@ export class NetworkClient {
     });
     this.room.onMessage("snapshot", (snapshot: WorldSnapshot) => {
       this.snapshot = snapshot;
+      const player = snapshot.players.find(
+        (candidate) => candidate.id === this.identity?.id,
+      );
+      if (this.identity && player) {
+        this.identity = {
+          ...this.identity,
+          name: player.name,
+          role: player.role,
+        };
+        sessionStorage.setItem(
+          "baby-warz-identity",
+          JSON.stringify(this.identity),
+        );
+      }
       this.onUpdate?.();
     });
     this.room.onMessage("notice", (message: string) => {

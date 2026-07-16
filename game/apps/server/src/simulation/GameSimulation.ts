@@ -201,6 +201,17 @@ export class GameSimulation {
       player.maxHearts = TUNING.baseHearts;
       player.eliminated = false;
       player.position = { x: 0, y: 1.1, z: -20 };
+      player.velocity = { x: 0, y: 0, z: 0 };
+      player.facing = 0;
+      player.hookCooldownMs = 0;
+      player.hitsDealt = 0;
+      player.hitsReceived = 0;
+      player.acknowledgedSequence = 0;
+      player.input = idleInput();
+      player.sprintUntil = 0;
+      player.armAt = 0;
+      player.hookReadyAt = 0;
+      player.grounded = true;
     }
     this.hostId = this.activePlayers()[0]?.id;
   }

@@ -78,8 +78,13 @@ describe("authoritative match simulation", () => {
 
   it("returns to a genuinely fresh lobby", () => {
     game.startMatch("host", 0);
-    game.players.get("host")!.foods = ["spinach"];
-    game.players.get("host")!.balls = 3;
+    const playedHost = game.players.get("host")!;
+    playedHost.foods = ["spinach"];
+    playedHost.balls = 3;
+    playedHost.hitsDealt = 4;
+    playedHost.hitsReceived = 2;
+    playedHost.velocity = { x: 3, y: 2, z: 1 };
+    playedHost.acknowledgedSequence = 12;
     game.players.get("guest")!.eliminated = true;
     game.step(50, 0.05);
     game.resetLobby();
@@ -89,6 +94,19 @@ describe("authoritative match simulation", () => {
       team: host.team,
       foods: host.foods,
       balls: host.balls,
-    }).toEqual({ phase: "lobby", team: undefined, foods: [], balls: 0 });
+      hitsDealt: host.hitsDealt,
+      hitsReceived: host.hitsReceived,
+      velocity: host.velocity,
+      acknowledgedSequence: host.acknowledgedSequence,
+    }).toEqual({
+      phase: "lobby",
+      team: undefined,
+      foods: [],
+      balls: 0,
+      hitsDealt: 0,
+      hitsReceived: 0,
+      velocity: { x: 0, y: 0, z: 0 },
+      acknowledgedSequence: 0,
+    });
   });
 });
